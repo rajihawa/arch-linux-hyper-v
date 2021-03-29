@@ -1,2 +1,105 @@
 # arch-linux-hyper-v
-this is how I install arch linux on windows hyper-v 
+this is how I install arch linux on hyper-v.
+
+# Steps
+- ### Step 1: Download the image
+  - https://archlinux.org/download/
+- ### Step 2: Creating the virtual machine
+  - Generation 2 to get UEFI boot.
+  - Minimum 1024 MB of RAM (I don't recommend to use dynamic memory since we will add swap later on).
+  - I use the default switch, but you can use any network switch you want.
+  - I give it 20GB HDD since I will add a shared folder later on I wont need that much space.
+  - Add the image as a bootable CD/DVD-ROM.
+  - Do not start the virtual machine yet.
+- ### Step 3: Configure the virtual machine
+  - Open the settings of the virtual machine.
+  - Security: disable Secure Boot.
+  - Processor: recoomend 2+ cores for better experience.
+  - Checkpoints: Disable Checkpoints
+  - (optional) Disable automatic start
+  - (optional) Automatic stop action to turn off the virtual machine
+- ### Step 4: Start Arch installation
+  - Start and Connect to the virtual machine.
+  - Before anything we need to install it from an ssh client so we can use copy/paste to make it easier to install arch.
+  - type `passwd` to change the password of the current session.
+  - type `ip addr` and copy `inet` from the result, thats the ip of your arch virtual machine.
+  - from windows open ssh client of your choosing, I use windows terminal with powershell 7.
+  - type `ssh root@<ip of arch></ip>` and it should open an ssh connection with your virtual machine.
+  - you can close the hyper-v client now if your ssh connection worked correctly.
+  - `timedatectl set-ntp true` to automatically set your time and date.
+- ### Step 5: Partitioning the Disk
+  - `fdisk -l` to check the disks you have, you should see the disk you allocated when you set up the virtual machine, for me its called `/dev/sda: 20 GiB`.
+  - `fdisk /dev/sda` to start patitioning.
+  - this will open a new prompt with special commands.
+  - first type `g` to create a new empty GPT partition table, since we are using UEFI boot. 
+  - then type `n` to create new partition of the default number (1) First sector leave at default and second sector type `+512M`, that will be out boot partition, then `n` again to create another partition, just like last time leave all at default but second sector type `+2G`, that would be our swap partition, for our last partition type `n` and leave everything to default, thats our root partition.
+  - now we gonna have to change the type of the partitions, type `t` then type `1` to change our first partition which is the boot one, since we are using UEFI, the type should be EFI System, which is number `1`, then type `t` again then type `2` to change the type of our swap partition to Linux swap which is number `19`, the root partition already have the right type.
+  - type `w` to write changes to disk and quit the prompt.
+  - type `fdisk /dev/sda -l` to confirm the changes.
+  - now we will format the disks we just creted.
+  - type `mkfs.fat -F32 /dev/sda1` to format the boot.
+  - type `mkfs.ext4 /dev/sda3` to format the root.
+  - type `mkswap /dev/sda2` then `swapon /dev/sda2` to format the swap.
+  - then type `mount /dev/sda3 /mnt` to mount the root.
+  - `mkdir /mnt/efi`
+  - `mount /dev/sda1 /mnt/efi` to mount the boot.
+- ### Step 6: Installing base packages
+  - `pacstrap /mnt base base-devel linux linux-firmware sudo nano` (feel free to replace nano with vim).
+  - wait for it to finish.
+  - to generate uuid for your disk type `genfstab -U /mnt >> /mnt/etc/fstab`.
+  - now to enter the root of your installed system type `arch-chroot /mnt`.
+  - set up timezone `ln -sf /usr/share/zoneinfo/<Region>/<City> /etc/localtime` (Change Region and City with yours).
+  - to sync the hardware clock `hwclock --systohc`.
+  - `nano /etc/locale.gen` - Uncomment en_US.UTF-8 UTF-8, or any locale you want.
+  - `locale-gen`
+  - `echo "LANG=en_US.UTF-8" > /etc/locale.conf`
+  - Then lets name the host, type `nano /etc/hostname` and name it whatever you want, I will name it `raji-archvm`.
+  - now lets configure the hosts file `nano /etc/hosts` and add these
+  - `127.0.0.1    localhost`
+  - `::1    localhost`
+  - `127.0.0.1    *hostname*.localdomain    *hostname*` change \*hostname\* with the name you chose.
+- ### Step 7: Creating user and installing network package
+  - first type `passwd` to change the root user password.
+  - create a non-root user `useradd -G wheel,audio,video -m username` (change the username you want).
+  - `passwd username` to change the user password.
+  - type `pacman -Syu networkmanager`
+  - then `systemctl enable NetworkManager` this will make sure you have internet access when you boot to the virtual machine.
+  - `EDITOR=nano visudo` and uncomment "%wheel ALL=(ALL) ALL".
+- ### Step 8: Installing boot loader
+  - `pacman -Syu grub efibootmgr`.
+  - `grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=Arch`.
+  - `grub-mkconfig -o /boot/grub/grub.cfg`.
+- ### Step 9: Starting the virtual machine
+  - `exit` to exit the arch-chroot.
+  - `shutdown now` to turn off the virtual machine.
+  - go to the vm's settings and remove the DVD Drive that has the arch image.
+  - Start and Connect to the vm again.
+  - login using the non-root user you made.
+  - `sudo pacman -Syu openssh`
+  - `sudo systemctl start sshd`
+  - `sudo systemctl enable sshd`
+  - ssh into the vm again (ip address might change so check it again) this time using the username and not root.
+- ### Step 10: Install hyper-v utils
+  - `sudo pacman -S hyperv`
+  - `sudo systemctl start hv_fcopy_daemon.service`
+  - `sudo systemctl enable hv_fcopy_daemon.service`
+  - `sudo systemctl start hv_kvp_daemon.service`
+  - `sudo systemctl enable hv_kvp_daemon.service`
+  - `sudo systemctl start hv_vss_daemon.service`
+  - `sudo systemctl enable hv_vss_daemon.service`
+- ### Step 11: Shared folder
+  - I use the shared folder for my coding projects, it makes it easy to transfer file between host and guest and you wont need enhanced session to do it, its very useful to me, so I recommend it
+  - In your windows machine (Host).
+  - Create a folder which you want to share, click `ALT+ENTER` > sharing > Advance sharing and enable `Share this folder`, then click `Permissions` and enable `Read` and `Change`, before exiting the proporties dialog, copy the `Network Path` we will need it later.
+  - Back to arch
+  - `sudo pacman -S cifs-utils smbclient`
+  - `mkdir ~/hyperv` this will be the shared folder.
+  - `sudo mkdir /etc/samba`
+  - `sudo touch /etc/samba/smb.conf`
+  - `sudo nano /etc/fstab`
+  - add this line
+  - PS: Network must be forward dashes exp: //DESKTOP-BNFUSR1/volume (volume is the file I chose to share C://volume)
+  First part of network is `DESKTOP-BNFUSR1` for example.
+  - `{Network Path} /home/username/hyperv cifs auto,user={windows username or email},pass={windows password},ip="$(nmblookup {FIRST PART OF NETWORK PATH} | head -n 1 | cut -d ' ' -f 1)",uid=$(id -u username),gid=$(id -g username) 0 0`
+  - `sudo reboot`
+- ### Step 12: Enjoy your VM :)
