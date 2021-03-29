@@ -96,10 +96,13 @@ this is how I install arch linux on hyper-v.
   - `mkdir ~/hyperv` this will be the shared folder.
   - `sudo mkdir /etc/samba`
   - `sudo touch /etc/samba/smb.conf`
+  - `sudo touch /root/.smbcred`
+  - `sudo nano /root/.smbcred` and add the following
+  - `username=<your windows username or password>`
+  - `password=<your windows password>`
   - `sudo nano /etc/fstab`
   - add this line
-  - PS: Network must be forward dashes exp: //DESKTOP-BNFUSR1/volume (volume is the file I chose to share C://volume)
-  First part of network is `DESKTOP-BNFUSR1` for example.
-  - `{Network Path} /home/username/hyperv cifs auto,user={windows username or email},pass={windows password},ip="$(nmblookup {FIRST PART OF NETWORK PATH} | head -n 1 | cut -d ' ' -f 1)",uid=$(id -u username),gid=$(id -g username) 0 0`
+  - PS: Network must be forward dashes exp: //DESKTOP-BNFUSR1/volume (volume is the file I chose to share C://volume).
+  - `{Network Path} /home/username/hyperv cifs credentials=/root/.smbcred,ip={host ip (ip route)},uid=1000 0 0`
   - `sudo reboot`
 - ### Step 12: Enjoy your VM :)
